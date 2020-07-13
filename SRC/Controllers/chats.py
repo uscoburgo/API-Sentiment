@@ -4,124 +4,98 @@ from src.Helpers.errorHelpers import errorHelper ,Error404 ,APIError
 from src.config import DBURL
 from bson.json_util import dumps
 from flask import request
-from datetime import datetime
 from bson import ObjectId
 import requests
-import ast
 import re
 import json
 import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from classifier import *
-clf = SentimentClassifier()
+# from nltk.sentiment.vader import SentimentIntensityAnalyzer
+# from classifier import *
+#clf = SentimentClassifier()
 
+client = MongoClient(DBURL, connectTimeoutMS=2000, serverSelectionTimeoutMS=2000)
+db = client.get_database()
 
-#DBURL='mongodb://192.168.1.73:27017/'
-client = MongoClient(DBURL)
-db = client.get_database("dbChat")
+@app.route("/")
+def begin():
+     return "Welcome to my API! Feel free to start creating convos and adding users to them! :)"
 
 ## L1 USER ENDPOINTS
 @app.route("/user/create/<username>")
 @errorHelper
-def insertUser(username):
+def createUser(username):
+    """
+        Create a user that will be part of conversations in the future.
+    """
     if username:
         dic={
             'user_name':username,
-            'insertion_date':getDate(),
-            'chats_list': []
+            'chats': []
         }
         user_id=db.users.insert_one(dic)
     else:
         print("ERROR")
         raise Error404("name not found")
-    return json.dumps({'user_id':str(user_id.inserted_id)})
+    return f"Congrats! You just created a user called {username} with user_id: {user_id}"
 
 
 
-'''- (GET) `/chat/create`
-  - **Purpose:** Create a conversation to load messages
-  - **Params:** An array of users ids `[user_id]`
-  - **Returns:** `chat_id`''' 
-  
-@app.route("/chat/create") #?ids=<arr>&name=<chatname>
+# Chat endpoint 1: 
+@app.route("/chat/create")
 @errorHelper
-def insertChat():
+def createChat():
+    """
+        Create a conversation to load messages on it.
+    """
     arr = request.args.get("ids")
-    print(arr)
-    name= request.args.get("name",default='')
+    name = request.args.get("name")
     
     #creation of a new chat with the users included in arr
     if arr:
-        arr=ast.literal_eval(arr)
         dic={   
             'chat_name': name,
-            'creation_date':getDate(),
             'users_list':[],
             'messages_list':[]
         }
+        
         chat_id=db.chats.insert_one(dic)
-        #insert the users in the chat
-        chatId=chat_id.inserted_id
+        chatID = chat_id.inserted_id
         for user_id in arr:
-            #r = requests.get(f'http://localhost:3500/chat/{chatId}/adduser?user_id={user_id}')
-            r=addChatUser(chatId, user_id)
-        #update of the users chats_list by adding the chat id
-        for user_id in arr:
-            post=db.users.find_one({'_id':ObjectId(user_id)})
-            post['chats_list'].append(ObjectId(chat_id.inserted_id))
-            db.users.update_one({'_id':ObjectId(user_id)}, {"$set": post}, upsert=False)
+            addUser(chatID, user_id)
+            user = db.users.find_one({'_id':ObjectId(user_id)})
+            user['chats'].append(ObjectId(chat_id.inserted_id))
 
     else:
         print("ERROR")
-        raise APIError("Tienes que mandar un query parameter ?ids=<arr>&name=<chatname>")
+        raise APIError("You have to send a query parameter as ?ids=<arr>")
     
-    return json.dumps({'chat_id':str(chat_id.inserted_id)})
+    return {'chat_id':str(chat_id.inserted_id)}
 
 
-
-'''- (GET) `/chat/<chat_id>/adduser`
-  - **Purpose:** Add a user to a chat, this is optional just in case you want to add more users to a chat after it's creation.
-  - **Params:** `user_id`
-  - **Returns:** `chat_id`'''
 
 @app.route("/chat/<chat_id>/adduser") #?user_id=<user_id>
 @errorHelper
-def addChatUser(chat_id, user_id=None):
-    if user_id==None:
-        user_id= request.args.get("user_id")
-    if user_id!=None and chat_id!=None:
-        #update of the chat document by adding the user id
-        post=db.chats.find_one({'_id':ObjectId(chat_id)})
-        if ObjectId(user_id) not in post['users_list']:
-            post['users_list'].append(ObjectId(user_id))
-        db.chats.update_one({'_id':ObjectId(chat_id)}, {"$set": post}, upsert=False)
-        
-        #update of the user permissions by adding the chat id
-        post=db.users.find_one({'_id':ObjectId(user_id)})
-        if ObjectId(chat_id) not in post['chats_list']:
-            post['chats_list'].append(ObjectId(chat_id))
-        db.users.update_one({'_id':ObjectId(user_id)}, {"$set": post}, upsert=False)
-    elif not chat_id:
+def addUser(chat_id, user_id):
+    user_id= request.args.get("user_id")
+    if not chat_id:
         print("ERROR")
         raise Error404("chat_id not found")
     elif not user_id:
         print("ERROR")
         raise APIError("You should send these query parameters ?user_id=<user_id>")
+    elif user_id!=None and chat_id!=None:
+        # This updates the users collection so that each user has a list with all the groups he is in
+        users=db.users.find_one({'_id':ObjectId(user_id)})
+        if ObjectId(chat_id) not in users['chats']:
+            users['chats'].append(ObjectId(chat_id))
+        #update of the chat document by adding the user id
+        chat=db.chats.find_one({'_id':ObjectId(chat_id)})
+        if ObjectId(user_id) not in chat['users_list']:
+            chat['users_list'].append(ObjectId(user_id))
+        
+    return {'chat_id': str(chat_id)}
 
-    return json.dumps({'chat_id': str(chat_id)})
 
-
-
-'''(POST) `/chat/<chat_id>/addmessage`
-  - **Purpose:** Add a message to the conversation. 
-  Help: Before adding the chat message to the database, 
-  check that the incoming user is part of this chat id. If not, raise an exception.
-  - **Params:**
-    - `chat_id`: Chat to store message
-    - `user_id`: the user that writes the message
-    - `text`: Message text
-  - **Returns:** `message_id`
-    '''
 
 @app.route("/chat/<chat_id>/addmessage") #?user_id=<user_id>&text=<text>
 @errorHelper
@@ -139,7 +113,6 @@ def addMessage(chat_id):
     dic={
          'user_id': ObjectId(user_id),
          'text':text,
-         'time':getDate(),
          'chat_id':ObjectId(chat_id)
     }
     message_id=db.messages.insert_one(dic)
@@ -152,10 +125,6 @@ def addMessage(chat_id):
     
     return json.dumps({'message_id':str(message_id.inserted_id)})
 
-
-'''- (GET) `/chat/<chat_id>/list`
-- **Purpose:** Get all messages from `chat_id`
-- **Returns:** json array with all messages from this `chat_id`'''
 
 @app.route("/chat/<chat_id>/list") 
 @errorHelper
@@ -173,63 +142,4 @@ def getMessages(chat_id):
     #   raise APIError("chat id not found")
     return json.dumps(diz)
 
-'''- (GET) `/chat/<chat_id>/sentiment`
-  - **Purpose:** Analyze messages from `chat_id`. Use `NLTK` sentiment analysis package for this task
-  - **Returns:** json with all sentiments from messages in the chat
-'''
-nltk.download("vader_lexicon")
-sia = SentimentIntensityAnalyzer()
-@app.route("/chat/<chat_id>/sentiment") #?lang=<lang>
-@errorHelper
-def getSentiment(chat_id):  
-    #mess=requests.get(f'http://localhost:3500/chat/{chat_id}/list').json()
-    mess=ast.literal_eval(getMessages(chat_id))
-    sentiments={}
-    try:
-        lang= request.args.get("lang")
-    except:
-        raise APIError("You should specify the language of the chat in the query parameters [english='en',spanish='es'] ?lang=<lang>")
 
-    if lang=='en':
-
-        for id, text in mess.items():
-            sentiments[id]={'text':text,"score":sia.polarity_scores(text)} 
-        sums=0
-        for v in sentiments.values():
-            sums+=v['score']['compound']
-        avg=sums/len(sentiments)
-        sentiments['chat_sentiment']=avg
-    else:
-        for id, text in mess.items():
-            sentiments[id]={'text':text,"score":clf.predict(text)} 
-        sums=0
-        for v in sentiments.values():
-            sums+=v['score']*2-1#normalize the score(in senti the score_value domain is [0,1])
-        avg=sums/len(sentiments)
-        sentiments['chat_sentiment']=avg
-
-    return json.dumps(sentiments)
-
-
-
-'''- (GET) `/chat/ids`
-- **Purpose:** Get all chat_id from the collection `chats`
-- **Returns:** json dict with all `chat_id` in the database'''
-
-@app.route("/chat/ids") 
-@errorHelper
-def getChatIds():
-    #try:
-    chat_ids={}
-    get=list(db.chats.find({},{'_id':1}))
-    for diz in get:      
-        for k,v in diz.items():
-            chat_ids[str(v)]=str(v)
-    #except:
-    #   raise APIError("chat id not found")
-    return json.dumps(chat_ids)
-
-def getDate():
-    now = datetime.now()
-    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    return dt_string
