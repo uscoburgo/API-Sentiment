@@ -35,10 +35,8 @@ def createUser(username):
         user_id=db.users.insert_one(dic)
     else:
         print("ERROR")
-        raise Error404("name not found")
-    return {
-        "message": f"Congrats! You just created a user called {username} with user_id: {user_id}"
-        }
+        raise Error404("No name input")
+    return json.dumps({'user_id':str(user_id.inserted_id)})
 
 
 
@@ -47,8 +45,7 @@ def createUser(username):
 @app.route("/chat/create") #?ids=<arr>&name=<chatname>
 @errorHelper
 def createChat():
-    arr = request.args.get("ids")
-    print(arr)
+    arr = request.args.getlist("ids")
     name= request.args.get("name",default='')
     
     #creation of a new chat with the users included in arr
@@ -60,9 +57,11 @@ def createChat():
         }
         chat_id=db.chats.insert_one(dic)
         #insert the users in the chat
-        chatId=chat_id.inserted_id
+        chatId = str(chat_id.inserted_id)
+        print(chatId)
         for user_id in arr:
-            r=addChatUser(chatId, user_id)
+            print(user_id)
+            addChatUser(chatId, user_id)
         #update of the users chats_list by adding the chat id
         for user_id in arr:
             post=db.users.find_one({'_id':ObjectId(user_id)})
@@ -112,8 +111,8 @@ def addMessage(chat_id):
     text= request.args.get("text")
     
     #check if the user has the permission to post in the chat or raise an exception
-    get=db.chats.find_one({"_id":ObjectId(chat_id) })
-    if not ObjectId(user_id) in get['users_list']:
+    chat=db.chats.find_one({"_id":ObjectId(chat_id) })
+    if not ObjectId(user_id) in chat['users_list']:
         raise PermissionError("Permission denied")
 
     #add the message to the messages collection and get the id
@@ -148,6 +147,6 @@ def getMessages(chat_id):
         diz[m]=r['text']
     #except:
     #   raise APIError("chat id not found")
-    return json.dumps(diz)
+    return diz
 
 
