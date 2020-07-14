@@ -46,61 +46,47 @@ def createUser(username):
 @app.route("/chat/create") #?ids=<arr>&name=<chatname>
 @errorHelper
 def createChat():
-    arr = request.args.getlist("ids")
-    name= request.args.get("name",default='')
+    list_users = request.args.getlist("ids")
+    conversation_name = request.args.get("name")
     
     #creation of a new chat with the users included in arr
-    if arr:
-        dic={   
-            'chat_name': name,
-            'users_list':[],
-            'messages_list':[]
-        }
-        chat_id=db.chats.insert_one(dic)
-        #insert the users in the chat
-        chatId = str(chat_id.inserted_id)
-        print(chatId)
-        for user_id in arr:
-            print(user_id)
-            addUser(chatId, user_id)
-        #update of the users chats_list by adding the chat id
-        for user_id in arr:
-            post=db.users.find_one({'_id':ObjectId(user_id)})
-            post['chats'].append(ObjectId(chat_id.inserted_id))
+    if list_users:
+        dic={'chat_name': conversation_name,'users_list':[],'messages_list':[]}
+        chat = db.chats.insert_one(dic)
+
+        chatId = str(chat.inserted_id)
+    
+        for user_id in list_users:
+            #insert the users in the chat
+            db.chats.update_one({'_id':ObjectId(chatId)}, {"$push": {"users_list": ObjectId(user_id)}})
+            #update of the users chats_list by adding the chat id
+            db.users.update_one({'_id':ObjectId(user_id)}, {"$push": {"chats": ObjectId(chatId)}})
 
     else:
         print("ERROR")
         raise APIError("Tienes que mandar un query parameter ?ids=<arr>&name=<chatname>")
     
-    return {'chat_id':str(chat_id.inserted_id)}
+    return {f'Congrats, you just created a chat called {conversation_name} with chat_id':str(chat.inserted_id)}
 
 
 
-@app.route("/chat/<chat_id>/adduser") #?user_id=<user_id>
+@app.route("/chat/<chat_id>/adduser")
 @errorHelper
-def addUser(chat_id, user_id=None):
-    if user_id==None:
-        user_id= request.args.get("user_id")
-    if user_id!=None and chat_id!=None:
-        #update of the chat document by adding the user id
-        post=db.chats.find_one({'_id':ObjectId(chat_id)})
-        if ObjectId(user_id) not in post['users_list']:
-            post['users_list'].append(ObjectId(user_id))
-        
-        #update of the user permissions by adding the chat id
-        post=db.users.find_one({'_id':ObjectId(user_id)})
-        if ObjectId(chat_id) not in post['chats']:
-            post['chats'].append(ObjectId(chat_id))
-
-    elif not chat_id:
+def addUser(chat_id):
+    user = request.args.get("user_id")
+    if not chat_id:
         print("ERROR")
-        raise Error404("chat_id not found")
-    elif not user_id:
+        raise Error404("The chat id wasn't entered")
+    if not user:
         print("ERROR")
-        raise APIError("You should send these query parameters ?user_id=<user_id>")
+        raise APIError("The user wasn't entered")
+    else:
+        #insert the users in the chat
+        db.chats.update_one({'_id':ObjectId(chat_id)}, {"$push": {"users_list": ObjectId(user)}})
+        #update of the users chats_list by adding the chat id
+        db.users.update_one({'_id':ObjectId(user)}, {"$push": {"chats": ObjectId(chat_id)}})
 
-    return {'chat_id': str(chat_id)}
-
+    return {f'we just entered user: {user} to chat_id: {str(chat_id)}'}
 
 
 @app.route("/chat/<chat_id>/addmessage") #?user_id=<user_id>&text=<text>
@@ -144,6 +130,3 @@ def getMessage(chat_id):
         diz[m]=r['text']
 
     return diz
-
-
-

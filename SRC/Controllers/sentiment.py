@@ -62,18 +62,16 @@ def getRecommendation(user_id):
     
     count_vectorizer = CountVectorizer()
     sparse_matrix = count_vectorizer.fit_transform(sent1.values())
-
     doc_term_matrix = sparse_matrix.todense()
     df = pd.DataFrame(doc_term_matrix, 
                   columns=count_vectorizer.get_feature_names(), 
                   index=sent1.keys())
     similarity_matrix = distance(df,df)
     sim_df = pd.DataFrame(similarity_matrix, columns=sent1.keys(), index=sent1.keys())
-
     def get3closest(sim_df,user_id):#user is an ObjectId
         col=sim_df[user_id].sort_values(ascending=False)[1:]
         return list(col[0:3].index)
     output= get3closest(sim_df,ObjectId(user_id))
     output=[str(el) for el in output]
-    return json.dumps({'recommended':output})
+    return {'recommended':output}
     """
