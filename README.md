@@ -27,5 +27,12 @@ The project is divided into numerous files:
 - To add a message to a chat, you will have to do: `/chat/<chat_id>/addmessage?user_id=<user_id>&text=<text>`
 - To get a list of all messages for a chat_id you'll have to do: `/chat/<chat_id>/list`
 
+
 ### L2 checkpoints
+
 - To get the sentiment of messages you'll have to do: `/chat/<chat_id>/sentiment`
+
+
+### L3 checkpoints
+
+Please find here the Heroku link: `https://uscoburgo-api.herokuapp.com`
