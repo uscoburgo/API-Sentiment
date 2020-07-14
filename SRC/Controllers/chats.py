@@ -2,13 +2,14 @@ from src.app import app
 from pymongo import MongoClient
 from src.Helpers.errorHelpers import errorHelper ,Error404 ,APIError
 from src.config import DBURL
-from bson.json_util import dumps
 from flask import request
 from bson import ObjectId
 import requests
 import re
 import json
 import nltk
+import ast
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 # from nltk.sentiment.vader import SentimentIntensityAnalyzer
 # from classifier import *
 #clf = SentimentClassifier()
@@ -36,7 +37,7 @@ def createUser(username):
     else:
         print("ERROR")
         raise Error404("No name input")
-    return json.dumps({'user_id':str(user_id.inserted_id)})
+    return {'user_id':str(user_id.inserted_id)}
 
 
 
@@ -61,24 +62,23 @@ def createChat():
         print(chatId)
         for user_id in arr:
             print(user_id)
-            addChatUser(chatId, user_id)
+            addUser(chatId, user_id)
         #update of the users chats_list by adding the chat id
         for user_id in arr:
             post=db.users.find_one({'_id':ObjectId(user_id)})
             post['chats'].append(ObjectId(chat_id.inserted_id))
-            db.users.update_one({'_id':ObjectId(user_id)}, {"$set": post}, upsert=False)
 
     else:
         print("ERROR")
         raise APIError("Tienes que mandar un query parameter ?ids=<arr>&name=<chatname>")
     
-    return json.dumps({'chat_id':str(chat_id.inserted_id)})
+    return {'chat_id':str(chat_id.inserted_id)}
 
 
 
 @app.route("/chat/<chat_id>/adduser") #?user_id=<user_id>
 @errorHelper
-def addChatUser(chat_id, user_id=None):
+def addUser(chat_id, user_id=None):
     if user_id==None:
         user_id= request.args.get("user_id")
     if user_id!=None and chat_id!=None:
@@ -86,13 +86,12 @@ def addChatUser(chat_id, user_id=None):
         post=db.chats.find_one({'_id':ObjectId(chat_id)})
         if ObjectId(user_id) not in post['users_list']:
             post['users_list'].append(ObjectId(user_id))
-        db.chats.update_one({'_id':ObjectId(chat_id)}, {"$set": post}, upsert=False)
         
         #update of the user permissions by adding the chat id
         post=db.users.find_one({'_id':ObjectId(user_id)})
         if ObjectId(chat_id) not in post['chats']:
             post['chats'].append(ObjectId(chat_id))
-        db.users.update_one({'_id':ObjectId(user_id)}, {"$set": post}, upsert=False)
+
     elif not chat_id:
         print("ERROR")
         raise Error404("chat_id not found")
@@ -100,7 +99,7 @@ def addChatUser(chat_id, user_id=None):
         print("ERROR")
         raise APIError("You should send these query parameters ?user_id=<user_id>")
 
-    return json.dumps({'chat_id': str(chat_id)})
+    return {'chat_id': str(chat_id)}
 
 
 
@@ -128,25 +127,23 @@ def addMessage(chat_id):
 
     post=db.chats.find_one({"_id":ObjectId(chat_id)})
     post['messages_list'].append(message_id.inserted_id)
-    db.chats.update_one({'_id':ObjectId(chat_id)}, {"$set": post}, upsert=False)
     
-    return json.dumps({'message_id':str(message_id.inserted_id)})
+    return {'message_id':str(message_id.inserted_id)}
 
 
 @app.route("/chat/<chat_id>/list") 
 @errorHelper
-def getMessages(chat_id):
-    #try:
+def getMessage(chat_id):
     get=db.chats.find_one({"_id":ObjectId(chat_id)})
     messages_ids=[]
     for el in get['messages_list']:
         messages_ids.append(str(el))
     diz={}
     for m in messages_ids:
-        r=db.messages.find_one({'_id':ObjectId(m)})
+        r = db.messages.find_one({'_id':ObjectId(m)})
         diz[m]=r['text']
-    #except:
-    #   raise APIError("chat id not found")
+
     return diz
+
 
 
