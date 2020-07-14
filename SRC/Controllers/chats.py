@@ -51,14 +51,18 @@ def createChat():
     
     #creation of a new chat with the users included in arr
     if list_users:
-        dic={'chat_name': conversation_name,'users_list':[],'messages_list':[]}
+        dic={
+            'chat_name': conversation_name,
+            'users':[],
+            'messages':[]
+        }
         chat = db.chats.insert_one(dic)
 
         chatId = str(chat.inserted_id)
     
         for user_id in list_users:
             #insert the users in the chat
-            db.chats.update_one({'_id':ObjectId(chatId)}, {"$push": {"users_list": ObjectId(user_id)}})
+            db.chats.update_one({'_id':ObjectId(chatId)}, {"$push": {"users": ObjectId(user_id)}})
             #update of the users chats_list by adding the chat id
             db.users.update_one({'_id':ObjectId(user_id)}, {"$push": {"chats": ObjectId(chatId)}})
 
@@ -77,56 +81,53 @@ def addUser(chat_id):
     if not chat_id:
         print("ERROR")
         raise Error404("The chat id wasn't entered")
-    if not user:
-        print("ERROR")
-        raise APIError("The user wasn't entered")
     else:
         #insert the users in the chat
-        db.chats.update_one({'_id':ObjectId(chat_id)}, {"$push": {"users_list": ObjectId(user)}})
+        db.chats.update_one({'_id':ObjectId(str(chat_id))}, {"$push": {"users": ObjectId(str(user))}})
         #update of the users chats_list by adding the chat id
-        db.users.update_one({'_id':ObjectId(user)}, {"$push": {"chats": ObjectId(chat_id)}})
+        db.users.update_one({'_id':ObjectId(str(user))}, {"$push": {"chats": ObjectId(str(chat_id))}})
 
-    return {f'we just entered user: {user} to chat_id: {str(chat_id)}'}
+    return {'entered user': {user}, 
+            'chat_id': {str(chat_id)}
+        }
 
 
-@app.route("/chat/<chat_id>/addmessage") #?user_id=<user_id>&text=<text>
+@app.route("/chat/<chat_id>/addmessage") 
 @errorHelper
 def addMessage(chat_id):
-    user_id= request.args.get("user_id")
-    text= request.args.get("text")
+    user = request.args.get("user_id")
+    message = request.args.get("text")
     
-    #check if the user has the permission to post in the chat or raise an exception
+    # Making sure that the user is in the group
     chat=db.chats.find_one({"_id":ObjectId(chat_id) })
-    if not ObjectId(user_id) in chat['users_list']:
-        raise PermissionError("Permission denied")
+    if not ObjectId(user) in chat['users']:
+        raise Error404("User is not a member of the chat")
 
     #add the message to the messages collection and get the id
-    
     dic={
-         'user_id': ObjectId(user_id),
-         'text':text,
+         'user': ObjectId(user),
+         'message':message,
          'chat_id':ObjectId(chat_id)
     }
-    message_id=db.messages.insert_one(dic)
-    
-    #add the message text to the messages_list of the chat
+    messageID = db.messages.insert_one(dic)
+    #add the message text to the messages of the chat
+    db.chats.update_one({'_id':ObjectId(chat_id)}, {"$push": {"messages": messageID.inserted_id}})  
 
-    post=db.chats.find_one({"_id":ObjectId(chat_id)})
-    post['messages_list'].append(message_id.inserted_id)
-    
-    return {'message_id':str(message_id.inserted_id)}
+    return f'We just entered message: {message} to chat_id: {str(chat_id)}'
+
 
 
 @app.route("/chat/<chat_id>/list") 
 @errorHelper
 def getMessage(chat_id):
-    get=db.chats.find_one({"_id":ObjectId(chat_id)})
-    messages_ids=[]
-    for el in get['messages_list']:
-        messages_ids.append(str(el))
-    diz={}
-    for m in messages_ids:
+    chat=db.chats.find_one({"_id":ObjectId(chat_id)})
+    messagesID=[]
+    dict_messages={}
+    for ID in chat['messages']:
+        messagesID.append(str(ID))
+    
+    for m in messagesID:
         r = db.messages.find_one({'_id':ObjectId(m)})
-        diz[m]=r['text']
+        dict_messages[m]=r['message']
 
-    return diz
+    return dict_messages

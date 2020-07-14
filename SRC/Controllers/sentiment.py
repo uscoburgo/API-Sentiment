@@ -20,31 +20,17 @@ sia = SentimentIntensityAnalyzer()
 @app.route("/chat/<chat_id>/sentiment") #?lang=<lang>
 @errorHelper
 def getSentiment(chat_id):  
-    sentiments={}
-    for id, text in getMessage(chat_id).items():
-        sentiments[id]={'text':text,"score":sia.polarity_scores(text)} 
+    sentimentMessage={}
+    for ID, message in getMessage(chat_id).items():
+        sentimentMessage[ID]={"message":message,"sentiment":sia.polarity_scores(message)} 
     sums=0
-    for v in sentiments.values():
+    for v in sentimentMessage.values():
         print(v)
-        sums+=v['score']['compound']
-    avg=sums/len(sentiments)
-    sentiments['chat_sentiment']=avg
+        sums+=v['sentiment']['compound']
+    average = sums/len(sentimentMessage)
+    sentimentMessage['overall sentiment']=average
 
-    return sentiments
-
-
-@app.route("/chat/ids") 
-@errorHelper
-def getChatIds():
-    #try:
-    chat_ids={}
-    get=list(db.chats.find({},{'_id':1}))
-    for diz in get:      
-        for k,v in diz.items():
-            chat_ids[str(v)]=str(v)
-    #except:
-    #   raise APIError("chat id not found")
-    return json.dumps(chat_ids)
+    return sentimentMessage
 
 """
     @app.route("/user/<user_id>/recommend")
