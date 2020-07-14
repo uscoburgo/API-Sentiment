@@ -6,11 +6,11 @@
 
 The goal of this project was creating an API containing messages and using sentiment analysis and NLP to group similar users together.
 
-[x] L1 - Write an API in `flask` just to store chat messages in a mongodb database.
-[x] L2(A) - Extract sentiment from chat messages and perform a report over a whole conversation
-[ ] L2(B) - Recommend friends to a user based on the contents from chat `documents` using a recommender system with `NLP` analysis.
-[x] L3 - Deploy the service with docker to heroku and store messages in a cloud database.
-[ ] L4 - **HOT** Do it real, use slack API to get messages and analyze the messages of our `datamad` channel.
+- [x] L1 - Write an API in `flask` just to store chat messages in a mongodb database.
+- [x] L2(A) - Extract sentiment from chat messages and perform a report over a whole conversation
+- [ ] L2(B) - Recommend friends to a user based on the contents from chat `documents` using a recommender system with `NLP` analysis.
+- [x] L3 - Deploy the service with docker to heroku and store messages in a cloud database.
+- [ ] L4 - **HOT** Do it real, use slack API to get messages and analyze the messages of our `datamad` channel.
 
 The project is divided into numerous files:
 - L1 takes place in chats.py
@@ -35,4 +35,4 @@ The project is divided into numerous files:
 
 ### L3 checkpoints
 
-Please find here the Heroku link: `https://uscoburgo-api.herokuapp.com`
+Please find here the Heroku link: https://uscoburgo-api.herokuapp.com
